@@ -1,23 +1,36 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
 using System.Windows.Forms;
-
+using System.Drawing;
 
 namespace ManagingNotes
 {
     public partial class NoteForm : Form
     {
         private NoteManager noteManager;
+        private Note editingNote = null; // ← Режим редактирования
 
         public NoteForm()
         {
-            InitializeComponent(); // ← Вызывает Designer!
+            InitializeComponent();
             noteManager = new NoteManager();
             UpdateNotesList();
+
+            // ← Клик по списку
+            listBoxNotes.SelectedIndexChanged += (s, e) =>
+            {
+                if (listBoxNotes.SelectedIndex == -1) return;
+
+                string title = listBoxNotes.SelectedItem.ToString().Split('(')[0].Trim();
+                var note = noteManager.Notes.Find(n => n.Title == title);
+
+                if (note != null)
+                {
+                    textBoxTitle.Text = note.Title;
+                    textBoxContent.Text = note.Content;
+                    editingNote = note;
+                    buttonAdd.Text = "Сохранить"; // ← Меняем текст кнопки
+                }
+            };
         }
 
         private void UpdateNotesList()
@@ -29,41 +42,65 @@ namespace ManagingNotes
             }
         }
 
-        // ← Используем имена ИЗ InitializeComponent()
         private void buttonAdd_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(textBoxTitle.Text) || string.IsNullOrEmpty(textBoxContent.Text))
             {
-                MessageBox.Show("Заполните все поля!", "Ошибка",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Заполните все поля!");
                 return;
             }
 
-            Note newNote = new Note(textBoxTitle.Text, textBoxContent.Text);
-            noteManager.AddNote(newNote);
-            textBoxTitle.Clear();
-            textBoxContent.Clear();
+            if (editingNote != null)
+            {
+                // ✏️ РЕДАКТИРУЕМ существующую
+                editingNote.Title = textBoxTitle.Text;
+                editingNote.Content = textBoxContent.Text;
+                editingNote.Date = DateTime.Now;
+                noteManager.SaveNotes();
+            }
+            else
+            {
+                // ➕ СОЗДАЁМ новую
+                noteManager.AddNote(new Note(textBoxTitle.Text, textBoxContent.Text));
+            }
+
+            // ← Обновляем список и сбрасываем форму
             UpdateNotesList();
+            ClearForm();
         }
 
         private void buttonRemove_Click(object sender, EventArgs e)
         {
             if (listBoxNotes.SelectedIndex == -1)
             {
-                MessageBox.Show("Выберите заметку!", "Ошибка",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Выберите заметку!");
                 return;
             }
 
-            string selectedItem = listBoxNotes.SelectedItem.ToString();
-            string title = selectedItem.Split('(')[0].Trim();
+            string title = listBoxNotes.SelectedItem.ToString().Split('(')[0].Trim();
+            var note = noteManager.Notes.Find(n => n.Title == title);
 
-            var noteToRemove = noteManager.Notes.Find(n => n.Title == title);
-            if (noteToRemove != null)
+            if (note != null)
             {
-                noteManager.RemoveNote(noteToRemove);
+                noteManager.RemoveNote(note);
                 UpdateNotesList();
+
+                // Если удалили ту, что редактировали — сбрасываем форму
+                if (editingNote == note)
+                {
+                    ClearForm();
+                }
             }
+        }
+
+        // ← Очистка формы + сброс кнопки
+        private void ClearForm()
+        {
+            textBoxTitle.Clear();
+            textBoxContent.Clear();
+            editingNote = null;
+            listBoxNotes.ClearSelected();
+            buttonAdd.Text = "Добавить"; // ← Возвращаем текст кнопки
         }
 
         [STAThread]
